@@ -1,0 +1,44 @@
+services:
+  api:
+    build:
+      context: ./backend
+    environment:
+      WATCHLIST_PATH: /config/watchlist.json
+      TZ: America/New_York
+      RISK_FREE_RATE: "0.045"
+    volumes:
+      # Named volume mounted as a DIRECTORY (not a single file) so the atomic
+      # rename in save_watchlist() works and edits survive redeploys.
+      - watchlist-data:/config
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      # Coolify magic var: assigns a domain and wires its proxy to port 80.
+      # Leave empty for an auto-generated domain, or set your own in the UI.
+      - SERVICE_FQDN_FRONTEND_80
+    depends_on:
+      api:
+        condition: service_healthy
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  watchlist-data:
